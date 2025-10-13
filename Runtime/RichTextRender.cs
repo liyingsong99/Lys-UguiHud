@@ -145,7 +145,8 @@
                 m_combineCache = new CombineInstance[meshes.Count * 2];
             }
 
-            for (int i = 0; i < meshes.Count; ++i)
+            meshCount = meshes.Count;
+            for (int i = 0; i < meshCount; ++i)
             {
                 m_combineCache[i].mesh = meshes[i].mesh;
                 m_combineCache[i].transform = meshes[i].matrix;
@@ -153,7 +154,20 @@
 
             ListPool<MeshOrder>.Release(meshes);
 
-            m_mesh.CombineMeshes(m_combineCache, true, true, false);
+            // Only pass the exact number of valid CombineInstances to avoid null mesh errors
+            // Create a temporary array slice without allocating if possible
+            CombineInstance[] combineArray;
+            if (m_combineCache.Length == meshCount)
+            {
+                combineArray = m_combineCache;
+            }
+            else
+            {
+                combineArray = new CombineInstance[meshCount];
+                System.Array.Copy(m_combineCache, combineArray, meshCount);
+            }
+
+            m_mesh.CombineMeshes(combineArray, true, true, false);
             m_meshFilter.sharedMesh = m_mesh;
             m_meshRender.sharedMaterial = material;
         }

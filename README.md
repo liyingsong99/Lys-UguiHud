@@ -29,7 +29,7 @@ Add to your `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "cn.etetet.uguihud": "https://github.com/your-repo/uguihud.git"
+    "uguihud": "https://github.com/liyingsong99/Lys-UguiHud.git"
   }
 }
 ```
@@ -111,7 +111,7 @@ For optimal performance with multiple HUD elements:
 
 ## Examples
 
-See the included demo scene in `Samples~/Rich Text Demo` for practical examples.
+See the included demo scene in `Scenes/Rich Text` for practical examples.
 
 ## Requirements
 

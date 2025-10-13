@@ -1,0 +1,31 @@
+{
+  "name": "cn.etetet.uguihud",
+  "version": "1.0.0",
+  "displayName": "UGUI HUD",
+  "description": "A high-performance UGUI extension for text-image mixing and 3D HUD display. Supports massive health bars, avatars, names, and buff icons with only 1 SetPass call. Ideal for MMO games.",
+  "unity": "2020.3",
+  "keywords": [
+    "ugui",
+    "hud",
+    "3d",
+    "text",
+    "sprite",
+    "rich text",
+    "performance",
+    "mmo"
+  ],
+  "author": {
+    "name": "Lys",
+    "email": ""
+  },
+  "dependencies": {
+    "com.unity.ugui": "1.0.0"
+  },
+  "samples": [
+    {
+      "displayName": "Rich Text Demo",
+      "description": "Demo scene showing rich text and sprite mixing capabilities",
+      "path": "Scenes"
+    }
+  ]
+}

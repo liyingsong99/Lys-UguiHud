@@ -6,7 +6,6 @@
       "Bash(cat:*)",
       "Bash(git rm:*)",
       "WebFetch(domain:github.com)",
-      "Read(//e/Github/UIGridRawImage/**)",
       "Bash(git restore:*)",
       "Bash(git mv:*)",
       "Bash(git add:*)"

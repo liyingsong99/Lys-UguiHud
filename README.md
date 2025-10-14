@@ -116,6 +116,7 @@ See the included demo scene in `Scenes/Rich Text` for practical examples.
 ## Requirements
 
 - Unity 2020.3 or higher
+- URP
 - UGUI (com.unity.ugui)
 
 ## License

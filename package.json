@@ -25,7 +25,7 @@
     {
       "displayName": "Rich Text Demo",
       "description": "Demo scene showing rich text and sprite mixing capabilities",
-      "path": "Scenes"
+      "path": "Samples~"
     }
   ]
 }

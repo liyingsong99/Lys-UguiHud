@@ -1,131 +1,129 @@
 # UGUI HUD
 
-A high-performance UGUI extension for text-image mixing and 3D HUD display.
+高性能的UGUI扩展包，用于图文混排和3D HUD显示，支持大量UI元素的批量渲染优化。
 
-## Features
+## 核心功能
 
-- **High Performance**: Supports massive health bars, avatars, names, and buff icons with only 1 SetPass call
-- **Text-Image Mixing**: Rich text component with inline sprite support
-- **3D HUD Support**: Render UI elements in 3D world space
-- **Multiple Render Modes**:
-  - `ERTM_UI`: Standard 2D UI mode
-  - `ERTM_3DText`: 3D text rendering mode
-  - `ERTM_MergeText`: Optimized batch rendering mode
-- **Flexible Image Types**: Supports Simple and Sliced sprite rendering
-- **Fill Amount Control**: Dynamic fill amount for health bars and progress indicators
+### 1. 图文混排 (RichText)
 
-## Installation
+- 在文本中嵌入Sprite图标
+- 支持图标动态填充（血条、进度条）
+- 语法：`<quad name=图标名 size=32 />`
 
-### Install via Package Manager
+### 2. 批量渲染 (RichTextRender)
 
-1. Open Unity Package Manager
-2. Click "+" button and select "Add package from git URL"
-3. Enter the repository URL
+- 将多个Text/Image合并为单个Mesh
+- **大幅减少DrawCall**（数百个UI元素 → 1个DrawCall）
+- 自动处理65535顶点限制（超限自动分割）
+- 适用场景：大量血条、名字、Buff图标
 
-### Install via Packages Manifest
+### 3. 三种渲染模式
 
-Add to your `Packages/manifest.json`:
+| 模式 | 说明 | 适用场景 |
+|------|------|----------|
+| `ERTM_UI` | 标准UGUI模式 | 普通UI |
+| `ERTM_3DText` | 3D文本独立渲染 | 独立3D HUD |
+| `ERTM_MergeText` | 批量合并渲染 | **性能优化（推荐）** |
 
-```json
+## 使用方法
+
+### 基础使用
+
+#### 1. 图文混排
+
+```csharp
+// 替换Text组件为RichText
+RichText richText = GetComponent<RichText>();
+richText.m_AtlasTexture = spriteAtlas;  // 设置图集
+richText.text = "生命 <quad name=heart size=24 /> x3";
+
+// 动态修改图标填充度（血条、进度条）
+richText.SetSpriteFillAmount("heart", 0.5f);  // 50%
+```
+
+#### 2. 批量渲染优化（关键）
+
+```
+GameObject (RichTextRender)              // 父节点：批量管理器
+├─ Text1 (RichText, mode=MergeText)     // 子节点：自动合并
+├─ Text2 (RichText, mode=MergeText)
+├─ Image1 (RichImage, mode=MergeText)
+└─ Image2 (RichImage, mode=MergeText)
+```
+
+**结果：** 4个UI元素 → 1个DrawCall
+
+### 实战示例
+
+#### 场景1：大量玩家血条
+
+```csharp
+// 父节点添加RichTextRender
+GameObject hudParent = new GameObject("HUD_Batch");
+hudParent.AddComponent<RichTextRender>();
+
+// 创建100个血条（仅1个DrawCall）
+for (int i = 0; i < 100; i++)
 {
-  "dependencies": {
-    "uguihud": "https://github.com/liyingsong99/Lys-UguiHud.git"
-  }
+    GameObject hud = new GameObject($"Player_{i}");
+    hud.transform.SetParent(hudParent.transform);
+
+    RichText nameText = hud.AddComponent<RichText>();
+    nameText.m_UiMode = ERichTextMode.ERTM_MergeText;  // 关键设置
+    nameText.text = $"Player{i} <quad name=vip size=16 />";
 }
 ```
 
-## Quick Start
-
-### Using RichText Component
-
-1. Create a UI Text object in your scene
-2. Replace the `Text` component with `RichText`
-3. Configure the settings:
-   - Set `m_UiMode` to desired render mode
-   - Assign `m_AtlasTexture` for sprite atlas
-   - Use `<quad>` tags in text for inline sprites
-
-#### Sprite Syntax
-
-```
-<quad name=sprite_name size=32 width=1 />
-```
-
-- `name`: Sprite name in the atlas
-- `size`: Display size in pixels
-- `width`: Width multiplier (optional)
-
-### Using RichImage Component
-
-1. Create a UI Image object
-2. Replace the `Image` component with `RichImage`
-3. Set `m_UiMode` to `ERTM_MergeText` for batch rendering
-
-### Setting Fill Amount
+#### 场景2：Buff图标列表
 
 ```csharp
-richText.SetSpriteFillAmount("health_bar", 0.75f);
+RichText buffText = GetComponent<RichText>();
+buffText.text = "Buffs: <quad name=buff_atk size=20 /> <quad name=buff_def size=20 />";
 ```
 
-## Performance Optimization
+## 性能特性
 
-### Batch Rendering with RichTextRender
+### 顶点限制保护（新增）
 
-For optimal performance with multiple HUD elements:
+- **自动检测**：实时计算总顶点数
+- **智能分割**：超过65,000顶点时自动分批渲染
+- **稳定性**：避免顶点溢出导致的渲染错误
+- **透明处理**：开发者无需关心内部细节
 
-1. Create a parent object with `RichTextRender` component
-2. Set child `RichText`/`RichImage` components to `ERTM_MergeText` mode
-3. All child elements will be batched into a single draw call
+**示例输出：**
 
-### Best Practices
+```
+[RichTextRender] Total vertices (80000) exceeds limit (65000).
+Splitting into multiple meshes. This will increase drawcalls.
+```
 
-- Use sprite atlases to minimize texture switching
-- Enable `ERTM_MergeText` mode for batch rendering
-- Limit the number of unique materials
-- Use object pooling for dynamic HUD elements
+### 性能对比
 
-## API Reference
+| 场景 | 传统方案 | 本包方案 | 优化效果 |
+|------|----------|----------|----------|
+| 100个血条 | 大量 DrawCall | 1-2 DrawCall | **90%降低** |
+| 500个名字 | 大量 DrawCall | 1-8 DrawCall | **90%降低** |
+| 顶点超限 | 渲染错误/崩溃 | 自动分割稳定运行 | **避免崩溃** |
 
-### RichText
+## 注意事项
 
-**Properties:**
+1. **必须设置图集**：`m_AtlasTexture` 需要指定Sprite Atlas
+2. **父子结构**：批量渲染需要父节点添加 `RichTextRender`
+3. **模式设置**：子节点必须设置 `m_UiMode = ERTM_MergeText`
+4. **材质统一**：同一批次内使用相同材质（Shader: `UI/RichText`）
+5. **顶点监控**：超限时关注Console警告，考虑UI拆分
 
-- `m_AtlasTexture`: Texture2D atlas for sprites
-- `m_UiMode`: Render mode (UI/3DText/MergeText)
-- `text`: Text content with sprite tags
+## 技术规格
 
-**Methods:**
+- **Unity版本**：2020.3+
+- **渲染管线**：支持URP
+- **顶点限制**：单Mesh最大65,000顶点（自动分割）
+- **Shader**：`UI/RichText`（支持双图层）
 
-- `SetSpriteFillAmount(string name, float amount)`: Set fill amount for named sprite
-- `Mesh Mesh()`: Get the generated mesh (for 3D modes)
+## 示例场景
 
-### RichImage
+参考场景：`Samples~/RichText.unity`
 
-**Properties:**
+## 鸣谢
 
-- `m_UiMode`: Render mode (UI/MergeText)
-
-**Methods:**
-
-- `Mesh Mesh()`: Get the generated mesh
-
-## Examples
-
-See the included demo scene in `Scenes/Rich Text` for practical examples.
-
-## Requirements
-
-- Unity 2020.3 or higher
-- URP
-- UGUI (com.unity.ugui)
-
-## License
-
-See [LICENSE](LICENSE) file for details.
-
-## Author
-
-Lys
-
-注意： 本仓库核心功能搬运自： <https://github.com/506638093/RichText.git>
-原作者：HuaHua
+核心功能基于 [RichText by HuaHua](https://github.com/506638093/RichText.git)

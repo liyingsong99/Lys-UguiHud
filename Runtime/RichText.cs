@@ -522,8 +522,29 @@ namespace UnityEngine.UI
             // Apply the offset to the vertices
             IList<UIVertex> verts = cachedTextGenerator.verts;
             float unitsPerPixel = 1 / pixelsPerUnit;
-            //Last 4 verts are always a new line...
-            int vertCount = verts.Count - 4;
+            // Check if the last 4 verts represent degenerate geometry (position values are all zero)
+            // Unity TextGenerator sometimes adds degenerate quads, but not always
+            int vertCount = verts.Count;
+            if (vertCount >= 4)
+            {
+                // Check if last quad has zero-area (degenerate geometry)
+                bool isDegenerate = true;
+                Vector3 firstPos = verts[vertCount - 4].position;
+                for (int i = vertCount - 3; i < vertCount; i++)
+                {
+                    if (verts[i].position != firstPos)
+                    {
+                        isDegenerate = false;
+                        break;
+                    }
+                }
+
+                // Only skip the last 4 verts if they are actually degenerate
+                if (isDegenerate)
+                {
+                    vertCount -= 4;
+                }
+            }
 
             toFill.Clear();
 

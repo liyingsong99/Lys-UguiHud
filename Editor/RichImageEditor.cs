@@ -304,7 +304,31 @@ namespace UnityEditor.UI
             EditorGUILayout.EndFadeGroup();
             NativeSizeButtonGUI();
 
+            EditorGUILayout.Space();
+
+            // UI Mode with auto-selection info
+            EditorGUILayout.LabelField("Render Settings", EditorStyles.boldLabel);
+
+            // Show current mode
+            EditorGUI.BeginDisabledGroup(true);
             EditorGUILayout.PropertyField(m_UiMode);
+            EditorGUI.EndDisabledGroup();
+
+            // Show auto-selection info
+            var richImage = target as RichImage;
+            var hasRichTextRender = richImage.transform.GetComponentInParent<RichTextRender>() != null;
+            var autoMode = hasRichTextRender ? ERichTextMode.ERTM_MergeText : ERichTextMode.ERTM_3DText;
+            var modeColor = richImage.m_UiMode == autoMode ? Color.green : Color.yellow;
+
+            var prevColor = GUI.color;
+            GUI.color = modeColor;
+            EditorGUILayout.HelpBox(
+                hasRichTextRender
+                    ? $"Auto-selected: ERTM_MergeText (RichTextRender detected in parent)\nBatch rendering enabled for optimal performance."
+                    : $"Auto-selected: ERTM_3DText (No RichTextRender in parent)\nIndependent 3D image rendering.",
+                richImage.m_UiMode == autoMode ? MessageType.Info : MessageType.Warning
+            );
+            GUI.color = prevColor;
 
             serializedObject.ApplyModifiedProperties();
         }

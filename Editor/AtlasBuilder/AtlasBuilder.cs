@@ -16,8 +16,8 @@ namespace UnityEngine.UI.Editor
         /// </summary>
         /// <param name="folderPath">Source folder path</param>
         /// <param name="maxSize">Maximum atlas size (default: 2048)</param>
-        /// <param name="padding">Padding between sprites (default: 2)</param>
-        public static void BuildAtlasFromFolder(string folderPath, int maxSize = 2048, int padding = 2)
+        /// <param name="padding">Padding between sprites (default: 4)</param>
+        public static void BuildAtlasFromFolder(string folderPath, int maxSize = 2048, int padding = 4)
         {
             if (string.IsNullOrEmpty(folderPath))
             {
@@ -91,12 +91,24 @@ namespace UnityEngine.UI.Editor
         {
             List<Texture2D> textures = new List<Texture2D>();
 
+            // Get the Atlas subfolder path to exclude it
+            string atlasFolder = Path.Combine(folderPath, "Atlas");
+            string normalizedAtlasFolder = atlasFolder.Replace('\\', '/');
+
             // Get all asset paths in folder
             string[] guids = AssetDatabase.FindAssets("t:Texture2D", new[] { folderPath });
 
             foreach (string guid in guids)
             {
                 string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                string normalizedAssetPath = assetPath.Replace('\\', '/');
+
+                // Skip textures in the Atlas subfolder
+                if (normalizedAssetPath.StartsWith(normalizedAtlasFolder + "/"))
+                {
+                    continue;
+                }
+
                 Texture2D texture = AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
 
                 if (texture != null)
@@ -169,11 +181,72 @@ namespace UnityEngine.UI.Editor
             }
             atlasTexture.SetPixels(clearColors);
 
-            // Copy each texture to atlas
+            // Copy each texture to atlas with edge extrusion to prevent bleeding
             foreach (var packed in packResult.packedRects)
             {
                 Color[] pixels = packed.texture.GetPixels();
-                atlasTexture.SetPixels(packed.rect.x, packed.rect.y, packed.rect.width, packed.rect.height, pixels);
+                int texWidth = packed.texture.width;
+                int texHeight = packed.texture.height;
+
+                // Copy main texture
+                atlasTexture.SetPixels(packed.rect.x, packed.rect.y, texWidth, texHeight, pixels);
+
+                // Extrude edges by 1 pixel to prevent bilinear filtering artifacts
+                // Left edge
+                if (packed.rect.x > 0)
+                {
+                    Color[] leftEdge = new Color[texHeight];
+                    for (int y = 0; y < texHeight; y++)
+                    {
+                        leftEdge[y] = pixels[y * texWidth];  // First column
+                    }
+                    for (int x = packed.rect.x - 1; x >= Mathf.Max(0, packed.rect.x - 2); x--)
+                    {
+                        atlasTexture.SetPixels(x, packed.rect.y, 1, texHeight, leftEdge);
+                    }
+                }
+
+                // Right edge
+                if (packed.rect.x + texWidth < width)
+                {
+                    Color[] rightEdge = new Color[texHeight];
+                    for (int y = 0; y < texHeight; y++)
+                    {
+                        rightEdge[y] = pixels[y * texWidth + (texWidth - 1)];  // Last column
+                    }
+                    for (int x = packed.rect.x + texWidth; x < Mathf.Min(width, packed.rect.x + texWidth + 2); x++)
+                    {
+                        atlasTexture.SetPixels(x, packed.rect.y, 1, texHeight, rightEdge);
+                    }
+                }
+
+                // Bottom edge
+                if (packed.rect.y > 0)
+                {
+                    Color[] bottomEdge = new Color[texWidth];
+                    for (int x = 0; x < texWidth; x++)
+                    {
+                        bottomEdge[x] = pixels[x];  // First row
+                    }
+                    for (int y = packed.rect.y - 1; y >= Mathf.Max(0, packed.rect.y - 2); y--)
+                    {
+                        atlasTexture.SetPixels(packed.rect.x, y, texWidth, 1, bottomEdge);
+                    }
+                }
+
+                // Top edge
+                if (packed.rect.y + texHeight < height)
+                {
+                    Color[] topEdge = new Color[texWidth];
+                    for (int x = 0; x < texWidth; x++)
+                    {
+                        topEdge[x] = pixels[(texHeight - 1) * texWidth + x];  // Last row
+                    }
+                    for (int y = packed.rect.y + texHeight; y < Mathf.Min(height, packed.rect.y + texHeight + 2); y++)
+                    {
+                        atlasTexture.SetPixels(packed.rect.x, y, texWidth, 1, topEdge);
+                    }
+                }
             }
 
             atlasTexture.Apply();
@@ -185,8 +258,8 @@ namespace UnityEngine.UI.Editor
             AtlasData atlasData = ScriptableObject.CreateInstance<AtlasData>();
             atlasData.atlasTexture = atlasTexture;
 
-            float invWidth = 1.0f / packResult.atlasSize.x;
-            float invHeight = 1.0f / packResult.atlasSize.y;
+            float atlasWidth = packResult.atlasSize.x;
+            float atlasHeight = packResult.atlasSize.y;
 
             foreach (var packed in packResult.packedRects)
             {
@@ -195,12 +268,16 @@ namespace UnityEngine.UI.Editor
                 spriteInfo.rect = new Rect(packed.rect.x, packed.rect.y, packed.rect.width, packed.rect.height);
                 spriteInfo.originalSize = new Vector2(packed.texture.width, packed.texture.height);
 
-                // Calculate UV rect (normalized 0-1)
+                // Calculate UV rect with half-pixel offset to avoid sampling edge pixels
+                // This prevents white edges caused by bilinear filtering
+                float halfPixelX = 0.5f / atlasWidth;
+                float halfPixelY = 0.5f / atlasHeight;
+
                 spriteInfo.uvRect = new Rect(
-                    packed.rect.x * invWidth,
-                    packed.rect.y * invHeight,
-                    packed.rect.width * invWidth,
-                    packed.rect.height * invHeight
+                    (packed.rect.x + halfPixelX) / atlasWidth,
+                    (packed.rect.y + halfPixelY) / atlasHeight,
+                    (packed.rect.width - 1.0f) / atlasWidth,  // Shrink by 1 pixel to avoid edge bleeding
+                    (packed.rect.height - 1.0f) / atlasHeight
                 );
 
                 atlasData.sprites.Add(spriteInfo);
@@ -219,11 +296,8 @@ namespace UnityEngine.UI.Editor
                 AssetDatabase.CreateFolder(parentFolder, "Atlas");
             }
 
-            // Get folder name for atlas naming
-            string folderName = Path.GetFileName(folderPath);
-
-            // Save atlas texture
-            string texturePath = Path.Combine(atlasFolder, $"{folderName}_Atlas.png");
+            // Use fixed "Atlas" naming for consistent regeneration
+            string texturePath = Path.Combine(atlasFolder, "Atlas.png");
             byte[] pngData = atlasTexture.EncodeToPNG();
             File.WriteAllBytes(texturePath, pngData);
             AssetDatabase.ImportAsset(texturePath);
@@ -260,8 +334,8 @@ namespace UnityEngine.UI.Editor
             // Reload atlas texture reference
             atlasData.atlasTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath);
 
-            // Save atlas data
-            string dataPath = Path.Combine(atlasFolder, $"{folderName}_AtlasData.asset");
+            // Save atlas data with fixed naming
+            string dataPath = Path.Combine(atlasFolder, "AtlasData.asset");
             AssetDatabase.CreateAsset(atlasData, dataPath);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();

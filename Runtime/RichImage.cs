@@ -33,11 +33,7 @@
 
         protected override void UpdateGeometry()
         {
-            if (m_UiMode == ERichTextMode.ERTM_UI)
-            {
-                base.UpdateGeometry();
-            }
-            else if (m_UiMode == ERichTextMode.ERTM_MergeText)
+            if (m_UiMode == ERichTextMode.ERTM_MergeText)
             {
                 if (m_mesh == null)
                 {
@@ -256,6 +252,27 @@
 
             // Cache RichTextRender reference to avoid repeated GetComponentInParent calls
             m_cachedRender = transform.GetComponentInParent<RichTextRender>();
+
+            // Auto-select UIMode based on hierarchy
+            AutoSelectUIMode();
+        }
+
+        /// <summary>
+        /// Automatically select UIMode based on hierarchy
+        /// </summary>
+        private void AutoSelectUIMode()
+        {
+            // If RichTextRender exists in parent, use ERTM_MergeText for batch rendering
+            // Otherwise use ERTM_3DText for independent rendering
+            ERichTextMode autoMode = m_cachedRender != null ? ERichTextMode.ERTM_MergeText : ERichTextMode.ERTM_3DText;
+
+            if (m_UiMode != autoMode)
+            {
+                m_UiMode = autoMode;
+#if UNITY_EDITOR
+                UnityEditor.EditorUtility.SetDirty(this);
+#endif
+            }
         }
 
         protected override void OnDisable()

@@ -183,23 +183,25 @@ namespace UnityEngine.UI.Editor
 
         private static void SplitFreeRect(List<FreeRect> freeRects, FreeRect usedRect, int width, int height)
         {
-            // Split into two possible free rectangles
+            // Create new free rectangles from the remaining space
+            // Right side
             if (usedRect.width > width)
             {
                 freeRects.Add(new FreeRect(
                     usedRect.x + width,
                     usedRect.y,
                     usedRect.width - width,
-                    usedRect.height
+                    height  // Only the height of the placed rect, not full height
                 ));
             }
 
+            // Top side
             if (usedRect.height > height)
             {
                 freeRects.Add(new FreeRect(
                     usedRect.x,
                     usedRect.y + height,
-                    usedRect.width,
+                    usedRect.width,  // Full width for top rect
                     usedRect.height - height
                 ));
             }

@@ -56,7 +56,36 @@ namespace UnityEngine.UI
 
         public void SetSprite(string path)
         {
-            //TODO 需要自己根据实际情况实现加载
+            // Load sprite from RichText's AtlasData
+            if (m_richText != null && m_richText.m_AtlasData != null)
+            {
+                var spriteInfo = m_richText.m_AtlasData.GetSpriteInfo(path);
+                if (spriteInfo != null && m_richText.m_AtlasData.atlasTexture != null)
+                {
+                    // Create Sprite from atlas texture and sprite info
+                    m_sprite = Sprite.Create(
+                        m_richText.m_AtlasData.atlasTexture,
+                        spriteInfo.rect,
+                        new Vector2(0.5f, 0.5f), // pivot center
+                        100.0f // pixels per unit
+                    );
+                }
+                else
+                {
+                    Debug.LogWarning($"[RichText] Sprite not found in AtlasData: {path}");
+                }
+            }
+            else if (m_richText != null && m_richText.m_AtlasTexture != null)
+            {
+                // Fallback: Try to load from material's _SpriteTex if AtlasData is not set
+                // This is a simplified approach - sprite rect would need to be calculated
+                // For now, this path is not fully implemented
+                Debug.LogWarning($"[RichText] AtlasData not set. Please assign m_AtlasData to use sprites. Sprite name: {path}");
+            }
+            else
+            {
+                Debug.LogWarning($"[RichText] Cannot load sprite: AtlasData and AtlasTexture are both null. Sprite name: {path}");
+            }
         }
 
         public string GetName()
@@ -80,6 +109,11 @@ namespace UnityEngine.UI
             return m_vertexIndex;
         }
 
+        public void SetVertexIndex(int index)
+        {
+            m_vertexIndex = index;
+        }
+
         public Vector2 GetSize()
         {
             return m_size;
@@ -92,10 +126,10 @@ namespace UnityEngine.UI
 
         private void checkSetValue(Match match, string key, string val)
         {
-            if (key == "n")
+            if (key == "n" || key == "name")
             {
                 SetName(val);
-                m_vertexIndex = match.Index;
+                SetSprite(val);  // Load sprite when name is set
             }
             else if (key == "s")
             {
@@ -112,6 +146,13 @@ namespace UnityEngine.UI
                 float height;
                 float.TryParse(val, out height);
                 m_size.y = height;
+            }
+            else if (key == "size")
+            {
+                float size;
+                float.TryParse(val, out size);
+                m_size.x = size;
+                m_size.y = size;
             }
             else if (key == "t")
             {

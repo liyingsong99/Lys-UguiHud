@@ -6,7 +6,6 @@ namespace UnityEngine.UI
     [System.Serializable]
     public enum ERichTextMode
     {
-        ERTM_UI,
         ERTM_3DText,
         ERTM_MergeText,
     }
@@ -48,6 +47,9 @@ namespace UnityEngine.UI
 
         [SerializeField]
         public Texture2D m_AtlasTexture;
+
+        [SerializeField]
+        public AtlasData m_AtlasData;
 
         [SerializeField]
         private string m_AtlasTexturePath;
@@ -118,11 +120,7 @@ namespace UnityEngine.UI
 
         protected override void UpdateGeometry()
         {
-            if (m_UiMode == ERichTextMode.ERTM_UI)
-            {
-                base.UpdateGeometry();
-            }
-            else if (m_UiMode == ERichTextMode.ERTM_3DText)
+            if (m_UiMode == ERichTextMode.ERTM_3DText)
             {
                 if (m_meshRender == null)
                 {
@@ -194,13 +192,22 @@ namespace UnityEngine.UI
             // Cache RichTextRender reference to avoid repeated GetComponentInParent calls
             m_cachedRender = transform.GetComponentInParent<RichTextRender>();
 
+            // Auto-select UIMode based on hierarchy
+            AutoSelectUIMode();
+
             parseText();
 
             if (mainTexture)
             {
                 m_Material.SetTexture("_MainTex", mainTexture);
             }
-            if (m_AtlasTexture)
+
+            // Set sprite texture from AtlasData or m_AtlasTexture
+            if (m_AtlasData != null && m_AtlasData.atlasTexture != null)
+            {
+                m_Material.SetTexture("_SpriteTex", m_AtlasData.atlasTexture);
+            }
+            else if (m_AtlasTexture)
             {
                 m_Material.SetTexture("_SpriteTex", m_AtlasTexture);
             }
@@ -208,6 +215,24 @@ namespace UnityEngine.UI
             SetVerticesDirty();
 
             base.OnEnable();
+        }
+
+        /// <summary>
+        /// Automatically select UIMode based on hierarchy
+        /// </summary>
+        private void AutoSelectUIMode()
+        {
+            // If RichTextRender exists in parent, use ERTM_MergeText for batch rendering
+            // Otherwise use ERTM_3DText for independent rendering
+            ERichTextMode autoMode = m_cachedRender != null ? ERichTextMode.ERTM_MergeText : ERichTextMode.ERTM_3DText;
+
+            if (m_UiMode != autoMode)
+            {
+                m_UiMode = autoMode;
+#if UNITY_EDITOR
+                UnityEditor.EditorUtility.SetDirty(this);
+#endif
+            }
         }
 
         protected override void OnDisable()
@@ -258,8 +283,39 @@ namespace UnityEngine.UI
         #region function
         private void parseText()
         {
+            // Replace quad tags with placeholder character so TextGenerator creates vertices for them
+            // Also replace regular spaces with non-breaking spaces to prevent TextGenerator from compressing/clipping them
             m_parseText = text;
-            parseSprite(m_parseText);
+
+            // First, replace all normal spaces with non-breaking spaces (U+00A0)
+            // This prevents spaces from being compressed or causing clipping issues
+            m_parseText = m_parseText.Replace(' ', '\u00A0');
+
+            // Find all quad tags and replace with a visible placeholder character
+            var matches = RichTextSprite.GetMatches(m_parseText);
+            if (matches.Count > 0)
+            {
+                System.Text.StringBuilder sb = new System.Text.StringBuilder(m_parseText);
+                int offset = 0;  // Track position offset as we replace tags
+
+                foreach (Match match in matches)
+                {
+                    int startPos = match.Index - offset;
+                    int length = match.Length;
+
+                    // Replace quad tag with a simple character as placeholder
+                    // Using '■' (U+25A0 BLACK SQUARE) - visible but will be replaced with sprite vertices
+                    sb.Remove(startPos, length);
+                    sb.Insert(startPos, '■');
+
+                    // Update offset for next replacement
+                    offset += (length - 1);  // We replaced 'length' chars with 1 char
+                }
+
+                m_parseText = sb.ToString();
+            }
+
+            parseSprite(text);  // Parse sprites from original text
         }
 
         private void parseSprite(string strText)
@@ -271,10 +327,12 @@ namespace UnityEngine.UI
             }
 
             int count = 0;
-            foreach (Match match in RichTextSprite.GetMatches(strText))
+            var matches = RichTextSprite.GetMatches(strText);
+
+            foreach (Match match in matches)
             {
                 RichTextSprite sprt = getRichSprite(count);
-                if (sprt.SetValue(match))
+                if (sprt != null && sprt.SetValue(match))
                 {
                     ++count;
                 }
@@ -308,25 +366,47 @@ namespace UnityEngine.UI
         private void handleSprite(VertexHelper toFill)
         {
             var count = m_spriteList.Count;
-            for (int i = 0; i < count; i++)
+            if (count == 0) return;
+
+            // Calculate how many characters actually have vertices
+            int charsWithVertices = toFill.currentVertCount / 4;
+
+            // Find placeholder character '■' positions in the generated text
+            int spriteIndex = 0;
+            for (int charIdx = 0; charIdx < cachedTextGenerator.characterCount && spriteIndex < count; charIdx++)
             {
-                RichTextSprite richSprite = m_spriteList[i];
-                var name = richSprite.GetName();
-                var sprite = richSprite.GetSprite();
-                if (string.IsNullOrEmpty(name) || null == sprite)
+                // Check if this character is our placeholder '■' (U+25A0 BLACK SQUARE)
+                if (charIdx < m_parseText.Length && m_parseText[charIdx] == '■')
                 {
-                    continue;
-                }
+                    RichTextSprite richSprite = m_spriteList[spriteIndex];
+                    var name = richSprite.GetName();
+                    var sprite = richSprite.GetSprite();
 
-                if (richSprite.GetImageType() == Image.Type.Simple)
-                {
-                    GenerateSimpleSprite(toFill, richSprite, sprite);
-                }
-                else if (richSprite.GetImageType() == Image.Type.Sliced)
-                {
-                    GenerateSlicedSprite(toFill, richSprite, sprite);
-                }
+                    // Check if this character actually has vertices generated
+                    if (charIdx >= charsWithVertices)
+                    {
+                        Debug.LogWarning($"[RichText] Sprite '{name}' placeholder has no vertices. Text might be clipped or RectTransform too small.");
+                        spriteIndex++;
+                        continue;
+                    }
 
+                    if (!string.IsNullOrEmpty(name) && sprite != null)
+                    {
+                        // Use the actual character index from TextGenerator
+                        richSprite.SetVertexIndex(charIdx);
+
+                        if (richSprite.GetImageType() == Image.Type.Simple)
+                        {
+                            GenerateSimpleSprite(toFill, richSprite, sprite);
+                        }
+                        else if (richSprite.GetImageType() == Image.Type.Sliced)
+                        {
+                            GenerateSlicedSprite(toFill, richSprite, sprite);
+                        }
+                    }
+
+                    spriteIndex++;
+                }
             }
         }
 
@@ -432,8 +512,10 @@ namespace UnityEngine.UI
         private void GenerateSimpleSprite(VertexHelper toFill, RichTextSprite richSprite, Sprite sprite)
         {
             UIVertex v = UIVertex.simpleVert;
-            var vertexIndex = richSprite.GetVertexIndex() * 4;
+            var charIndex = richSprite.GetVertexIndex();  // This is character index in text
+            var vertexIndex = charIndex * 4;  // Convert to vertex index (4 verts per char)
             var fetchIndex = vertexIndex + 3;
+
             if (fetchIndex >= toFill.currentVertCount)
             {
                 return;
@@ -475,8 +557,14 @@ namespace UnityEngine.UI
 
         private void setSpriteVertex(VertexHelper toFill, int vertexIndex, Vector3 position, Vector2 uv0)
         {
+            if (vertexIndex >= toFill.currentVertCount)
+            {
+                return;
+            }
+
             UIVertex v = new UIVertex();
             toFill.PopulateUIVertex(ref v, vertexIndex);
+
             v.position = position;
             v.uv0 = uv0;
             v.uv1 = new Vector2(0, 1.0f);
@@ -522,6 +610,7 @@ namespace UnityEngine.UI
             // Apply the offset to the vertices
             IList<UIVertex> verts = cachedTextGenerator.verts;
             float unitsPerPixel = 1 / pixelsPerUnit;
+
             // Check if the last 4 verts represent degenerate geometry (position values are all zero)
             // Unity TextGenerator sometimes adds degenerate quads, but not always
             int vertCount = verts.Count;

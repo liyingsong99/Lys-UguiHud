@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using System;
 
 namespace UnityEngine.UI.Editor
 {
@@ -296,8 +297,13 @@ namespace UnityEngine.UI.Editor
                 AssetDatabase.CreateFolder(parentFolder, "Atlas");
             }
 
-            // Use fixed "Atlas" naming for consistent regeneration
-            string texturePath = Path.Combine(atlasFolder, "Atlas.png");
+            // Generate naming based on parent folder name
+            string parentFolderName = GetParentFolderName(folderPath);
+            string atlasName = string.IsNullOrEmpty(parentFolderName) ? "Atlas" : $"Atlas_{parentFolderName}";
+            string atlasDataName = string.IsNullOrEmpty(parentFolderName) ? "AtlasData" : $"AtlasData_{parentFolderName}";
+
+            // Use dynamic naming based on parent folder
+            string texturePath = Path.Combine(atlasFolder, $"{atlasName}.png");
             byte[] pngData = atlasTexture.EncodeToPNG();
             File.WriteAllBytes(texturePath, pngData);
             AssetDatabase.ImportAsset(texturePath);
@@ -334,8 +340,8 @@ namespace UnityEngine.UI.Editor
             // Reload atlas texture reference
             atlasData.atlasTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath);
 
-            // Save atlas data with fixed naming
-            string dataPath = Path.Combine(atlasFolder, "AtlasData.asset");
+            // Save atlas data with dynamic naming
+            string dataPath = Path.Combine(atlasFolder, $"{atlasDataName}.asset");
             AssetDatabase.CreateAsset(atlasData, dataPath);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -345,6 +351,53 @@ namespace UnityEngine.UI.Editor
 
             Debug.Log($"Atlas saved to: {atlasFolder}");
             Debug.Log($"Atlas contains {spriteMetaData.Count} sprites that can be used directly in Unity");
+        }
+
+        /// <summary>
+        /// 获取当前文件夹名称，用于生成Atlas和AtlasData的命名
+        /// </summary>
+        /// <param name="folderPath">当前文件夹路径</param>
+        /// <returns>当前文件夹名称，如果无法获取则返回空字符串</returns>
+        private static string GetParentFolderName(string folderPath)
+        {
+            if (string.IsNullOrEmpty(folderPath))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                // 标准化路径分隔符
+                string normalizedPath = folderPath.Replace('\\', '/');
+
+                // 移除末尾的斜杠
+                if (normalizedPath.EndsWith("/"))
+                {
+                    normalizedPath = normalizedPath.TrimEnd('/');
+                }
+
+                // 直接获取当前文件夹名称
+                string currentFolderName = Path.GetFileName(normalizedPath);
+                if (string.IsNullOrEmpty(currentFolderName))
+                {
+                    return string.Empty;
+                }
+
+                // 验证文件夹名称是否有效（不包含特殊字符）
+                if (currentFolderName.Contains(" ") ||
+                    currentFolderName.Contains(".") ||
+                    currentFolderName.Length < 2)
+                {
+                    return string.Empty;
+                }
+
+                return currentFolderName;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"Failed to extract folder name from path: {folderPath}. Error: {ex.Message}");
+                return string.Empty;
+            }
         }
     }
 }

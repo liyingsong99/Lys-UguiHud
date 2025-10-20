@@ -71,5 +71,49 @@ namespace UnityEngine.UI
         {
             return sprites.Exists(s => s.name == spriteName);
         }
+
+        /// <summary>
+        /// Get sprite by name from atlas texture
+        /// </summary>
+        /// <param name="spriteName">Name of the sprite to get</param>
+        /// <returns>Sprite object or null if not found</returns>
+        public Sprite GetSprite(string spriteName)
+        {
+            var spriteInfo = GetSpriteInfo(spriteName);
+            if (spriteInfo == null || atlasTexture == null)
+            {
+                return null;
+            }
+
+            return Sprite.Create(
+                atlasTexture,
+                spriteInfo.rect,
+                new Vector2(0.5f, 0.5f), // pivot center
+                100.0f // pixels per unit
+            );
+        }
+
+        /// <summary>
+        /// Get sprite by name with custom pivot and pixels per unit
+        /// </summary>
+        /// <param name="spriteName">Name of the sprite to get</param>
+        /// <param name="pivot">Sprite pivot point (0-1)</param>
+        /// <param name="pixelsPerUnit">Pixels per unit for the sprite</param>
+        /// <returns>Sprite object or null if not found</returns>
+        public Sprite GetSprite(string spriteName, Vector2 pivot, float pixelsPerUnit)
+        {
+            var spriteInfo = GetSpriteInfo(spriteName);
+            if (spriteInfo == null || atlasTexture == null)
+            {
+                return null;
+            }
+
+            return Sprite.Create(
+                atlasTexture,
+                spriteInfo.rect,
+                pivot,
+                pixelsPerUnit
+            );
+        }
     }
 }

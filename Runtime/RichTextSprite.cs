@@ -59,18 +59,9 @@ namespace UnityEngine.UI
             // Load sprite from RichText's AtlasData
             if (m_richText != null && m_richText.m_AtlasData != null)
             {
-                var spriteInfo = m_richText.m_AtlasData.GetSpriteInfo(path);
-                if (spriteInfo != null && m_richText.m_AtlasData.atlasTexture != null)
-                {
-                    // Create Sprite from atlas texture and sprite info
-                    m_sprite = Sprite.Create(
-                        m_richText.m_AtlasData.atlasTexture,
-                        spriteInfo.rect,
-                        new Vector2(0.5f, 0.5f), // pivot center
-                        100.0f // pixels per unit
-                    );
-                }
-                else
+                // Use the new GetSprite API for cleaner code
+                m_sprite = m_richText.m_AtlasData.GetSprite(path);
+                if (m_sprite == null)
                 {
                     Debug.LogWarning($"[RichText] Sprite not found in AtlasData: {path}");
                 }
